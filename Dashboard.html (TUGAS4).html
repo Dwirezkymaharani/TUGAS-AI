@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Precipitation Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        
+        /* Smooth transitions for dashboard reveal */
+        #dashboard-section {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            display: none;
+        }
+        
+        #dashboard-section.visible {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            800: '#1e3a8a',
+                            900: '#1e3a8a'
+                        },
+                        teal: {
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="text-slate-800 antialiased h-screen flex flex-col">
+
+    <!-- UPLOAD SECTION -->
+    <div id="upload-section" class="flex-1 flex items-center justify-center p-6">
+        <div class="max-w-md w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-8 text-center">
+            <div class="w-16 h-16 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-900 mb-2">Precipitation Dashboard</h2>
+            <p class="text-slate-500 mb-6 text-sm">Upload your NASA POWER CSV file to view executive insights.</p>
+            
+            <label for="csv-upload" class="cursor-pointer bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-6 rounded-lg transition-colors inline-block w-full">
+                Select CSV File
+            </label>
+            <input type="file" id="csv-upload" accept=".csv" class="hidden" onchange="handleFileUpload(event)">
+            <p id="upload-error" class="text-red-500 text-sm mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div id="dashboard-section" class="flex-1 p-4 md:p-8 max-w-[1600px] mx-auto w-full">
+        
+        <!-- Header & Filters -->
+        <header class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 sticky top-0 bg-[#f8fafc] z-10 py-2 border-b border-slate-200 pb-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-navy-900">Precipitation Overview</h1>
+                <p class="text-sm text-slate-500 mt-1" id="date-range-label">Data loaded.</p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <label for="filter-year" class="text-sm font-medium text-slate-600">Year:</label>
+                    <select id="filter-year" class="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 p-2 outline-none shadow-sm min-w-[100px]" onchange="applyFilters()">
+                        <option value="all">All Years</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <label for="filter-month" class="text-sm font-medium text-slate-600">Month:</label>
+                    <select id="filter-month" class="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 p-2 outline-none shadow-sm min-w-[100px]" onchange="applyFilters()">
+                        <option value="all">All Months</option>
+                        <option value="0">January</option>
+                        <option value="1">February</option>
+                        <option value="2">March</option>
+                        <option value="3">April</option>
+                        <option value="4">May</option>
+                        <option value="5">June</option>
+                        <option value="6">July</option>
+                        <option value="7">August</option>
+                        <option value="8">September</option>
+                        <option value="9">October</option>
+                        <option value="10">November</option>
+                        <option value="11">December</option>
+                    </select>
+                </div>
+                
+                <button onclick="resetFilters()" class="text-sm bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-medium py-2 px-4 rounded-lg transition-colors shadow-sm">
+                    Reset Filters
+                </button>
+            </div>
+        </header>
+
+        <!-- KPI Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <!-- KPI 1 -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-sm font-medium text-slate-500 mb-1">Total Precipitation</h3>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpi-total" class="text-3xl font-bold text-navy-900">0</span>
+                    <span class="text-sm font-medium text-slate-500">mm</span>
+                </div>
+            </div>
+            <!-- KPI 2 -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-sm font-medium text-slate-500 mb-1">Avg Daily Precipitation</h3>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpi-avg" class="text-3xl font-bold text-teal-600">0</span>
+                    <span class="text-sm font-medium text-slate-500">mm / day</span>
+                </div>
+            </div>
+            <!-- KPI 3 -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-sm font-medium text-slate-500 mb-1">Max Daily Rain</h3>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpi-max" class="text-3xl font-bold text-navy-900">0</span>
+                    <span class="text-sm font-medium text-slate-500">mm</span>
+                </div>
+            </div>
+            <!-- KPI 4 -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-sm font-medium text-slate-500 mb-1">Total Rainy Days (>0.1mm)</h3>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpi-days" class="text-3xl font-bold text-teal-600">0</span>
+                    <span id="kpi-days-pct" class="text-sm font-medium text-slate-500">(0%)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actionable Insights Panel -->
+        <div class="bg-teal-50 border border-teal-100 rounded-xl p-5 mb-6 shadow-sm">
+            <h3 class="text-teal-900 font-semibold mb-3 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clip-rule="evenodd" />
+                </svg>
+                Key Insights & Recommendations
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm" id="insights-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Trend Chart (Spans 2 cols) -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 lg:col-span-2">
+                <h3 class="text-base font-semibold text-slate-800 mb-4">Precipitation Trend Over Time</h3>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Yearly Totals -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-base font-semibold text-slate-800 mb-4">Yearly Precipitation Totals</h3>
+                <div class="chart-container">
+                    <canvas id="yearlyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Seasonality -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-base font-semibold text-slate-800 mb-4">Seasonality (Avg Daily Rain by Month)</h3>
+                <div class="chart-container">
+                    <canvas id="seasonalityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Rain Intensity Donut -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-base font-semibold text-slate-800 mb-4">Daily Rain Intensity Breakdown</h3>
+                <div class="chart-container">
+                    <canvas id="intensityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Top 5 Days -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-base font-semibold text-slate-800 mb-4">Top 5 Rainiest Days</h3>
+                <div class="chart-container">
+                    <canvas id="topDaysChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global State
+        let rawData = [];
+        let filteredData = [];
+        
+        // Chart Instances
+        let charts = {
+            trend: null,
+            yearly: null,
+            seasonality: null,
+            intensity: null,
+            topDays: null
+        };
+
+        const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const COLORS = {
+            primary: '#0d9488', // Teal 600
+            primaryLight: '#5eead4', // Teal 300
+            secondary: '#1e3a8a', // Navy 800
+            secondaryLight: '#93c5fd', // Blue 300
+            grey: '#cbd5e1',
+            categories: ['#94a3b8', '#5eead4', '#0ea5e9', '#1e3a8a'] // None, Light, Mod, Heavy
+        };
+
+        // 1. File Upload & Parsing Logic
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            const errorEl = document.getElementById('upload-error');
+            
+            if (!file) return;
+            if (!file.name.endsWith('.csv')) {
+                errorEl.textContent = "Please upload a valid CSV file.";
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            errorEl.classList.add('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                processCSVText(text);
+            };
+            reader.onerror = function() {
+                errorEl.textContent = "Error reading file.";
+                errorEl.classList.remove('hidden');
+            }
+            reader.readAsText(file);
+        }
+
+        function processCSVText(csvText) {
+            // Find the line that starts with the header to strip NASA metadata
+            const lines = csvText.split(/\r?\n/);
+            const headerIndex = lines.findIndex(line => line.includes('YEAR,DOY,PRECTOTCORR') || line.includes('YEAR,DOY,PRECTOT'));
+            
+            if (headerIndex === -1) {
+                document.getElementById('upload-error').textContent = "Could not find expected headers (YEAR, DOY, PRECTOTCORR). Invalid dataset.";
+                document.getElementById('upload-error').classList.remove('hidden');
+                return;
+            }
+
+            const cleanCsv = lines.slice(headerIndex).join('\n');
+            
+            Papa.parse(cleanCsv, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    transformData(results.data);
+                }
+            });
+        }
+
+        // 2. Data Processing (YEAR & DOY -> Date)
+        function transformData(data) {
+            rawData = [];
+            const yearsSet = new Set();
+            let minDate = new Date(9999, 0, 1);
+            let maxDate = new Date(1000, 0, 1);
+
+            data.forEach(row => {
+                const year = row['YEAR'];
+                const doy = row['DOY'];
+                const precipKey = Object.keys(row).find(k => k.includes('PREC'));
+                const precip = parseFloat(row[precipKey] || 0);
+
+                if (!year || !doy) return; // Skip invalid rows
+
+                // Convert DOY to Date. In JS, month is 0-indexed. DOY 1 = Jan 1.
+                const date = new Date(year, 0, doy);
+                
+                if (date < minDate) minDate = date;
+                if (date > maxDate) maxDate = date;
+
+                yearsSet.add(year);
+
+                rawData.push({
+                    year: year,
+                    month: date.getMonth(),
+                    day: date.getDate(),
+                    date: date,
+                    dateStr: `${year}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`,
+                    precip: Math.max(0, precip) // prevent negative anomalies
+                });
+            });
+
+            // Populate Year Filter
+            const yearSelect = document.getElementById('filter-year');
+            yearSelect.innerHTML = '<option value="all">All Years</option>';
+            Array.from(yearsSet).sort().forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                yearSelect.appendChild(opt);
+            });
+
+            // Update Date Range Label
+            document.getElementById('date-range-label').textContent = 
+                `Data from ${minDate.toLocaleDateString()} to ${maxDate.toLocaleDateString()} (${rawData.length} records)`;
+
+            // Transition UI
+            document.getElementById('upload-section').style.display = 'none';
+            const dashboard = document.getElementById('dashboard-section');
+            dashboard.style.display = 'block';
+            
+            // Trigger reflow for transition
+            setTimeout(() => {
+                dashboard.classList.add('visible');
+                resetFilters(); // Initialize dashboard with all data
+            }, 50);
+        }
+
+        // 3. Filtering Logic
+        function applyFilters() {
+            const yearFilter = document.getElementById('filter-year').value;
+            const monthFilter = document.getElementById('filter-month').value;
+
+            filteredData = rawData.filter(d => {
+                const matchYear = yearFilter === 'all' || d.year.toString() === yearFilter;
+                const matchMonth = monthFilter === 'all' || d.month.toString() === monthFilter;
+                return matchYear && matchMonth;
+            });
+
+            updateDashboard();
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-year').value = 'all';
+            document.getElementById('filter-month').value = 'all';
+            applyFilters();
+        }
+
+        // 4. Update Dashboard (KPIs, Charts, Insights)
+        function updateDashboard() {
+            if (filteredData.length === 0) return;
+
+            // Aggregation variables
+            let totalPrecip = 0;
+            let maxPrecip = 0;
+            let maxPrecipDate = null;
+            let rainyDays = 0;
+
+            const trendMap = {}; // "YYYY-MM" -> sum
+            const yearlyMap = {}; // "YYYY" -> sum
+            const monthlySeasonality = Array(12).fill(0).map(() => ({ sum: 0, count: 0 }));
+            const intensityCounts = { none: 0, light: 0, mod: 0, heavy: 0 };
+
+            // Aggregate Data
+            filteredData.forEach(d => {
+                const p = d.precip;
+                totalPrecip += p;
+                
+                if (p > maxPrecip) {
+                    maxPrecip = p;
+                    maxPrecipDate = d.dateStr;
+                }
+                
+                if (p > 0.1) rainyDays++;
+
+                // Intensity
+                if (p < 0.1) intensityCounts.none++;
+                else if (p <= 5) intensityCounts.light++;
+                else if (p <= 20) intensityCounts.mod++;
+                else intensityCounts.heavy++;
+
+                // Trend
+                const ymKey = `${d.year}-${String(d.month+1).padStart(2,'0')}`;
+                trendMap[ymKey] = (trendMap[ymKey] || 0) + p;
+
+                // Yearly
+                yearlyMap[d.year] = (yearlyMap[d.year] || 0) + p;
+
+                // Seasonality
+                monthlySeasonality[d.month].sum += p;
+                monthlySeasonality[d.month].count++;
+            });
+
+            const avgDaily = totalPrecip / filteredData.length;
+            const rainyPct = (rainyDays / filteredData.length) * 100;
+
+            // Update KPIs
+            animateValue("kpi-total", totalPrecip.toFixed(1));
+            animateValue("kpi-avg", avgDaily.toFixed(2));
+            animateValue("kpi-max", maxPrecip.toFixed(1));
+            animateValue("kpi-days", rainyDays);
+            document.getElementById("kpi-days-pct").textContent = `(${rainyPct.toFixed(1)}%)`;
+
+            // Prepare Data for Charts
+            // 1. Trend
+            const trendKeys = Object.keys(trendMap).sort();
+            const trendData = trendKeys.map(k => trendMap[k]);
+            
+            // 2. Yearly
+            const yearlyKeys = Object.keys(yearlyMap).sort();
+            const yearlyData = yearlyKeys.map(k => yearlyMap[k]);
+
+            // 3. Seasonality (Avg daily rain in that month)
+            const seasonalityData = monthlySeasonality.map(m => m.count > 0 ? m.sum / m.count : 0);
+
+            // 4. Top 5 Days
+            const top5 = [...filteredData].sort((a, b) => b.precip - a.precip).slice(0, 5);
+
+            // Update Charts
+            renderTrendChart(trendKeys, trendData);
+            renderYearlyChart(yearlyKeys, yearlyData);
+            renderSeasonalityChart(seasonalityData);
+            renderIntensityChart([intensityCounts.none, intensityCounts.light, intensityCounts.mod, intensityCounts.heavy]);
+            renderTopDaysChart(top5);
+
+            // Generate Insights
+            generateInsights(yearlyMap, totalPrecip, rainyPct, intensityCounts, filteredData.length, top5);
+        }
+
+        function animateValue(id, endValue) {
+            document.getElementById(id).textContent = endValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        // 5. Chart Rendering Functions (with Update/Destroy logic)
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.color = '#64748b'; // slate-500
+
+        function renderTrendChart(labels, data) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (charts.trend) charts.trend.destroy();
+            charts.trend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Precipitation (mm)',
+                        data: data,
+                        borderColor: COLORS.primary,
+                        backgroundColor: COLORS.primaryLight + '40', // 40% opacity
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { borderDash: [4, 4] } }
+                    }
+                }
+            });
+        }
+
+        function renderYearlyChart(labels, data) {
+            const ctx = document.getElementById('yearlyChart').getContext('2d');
+            if (charts.yearly) charts.yearly.destroy();
+            charts.yearly = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Yearly Total (mm)',
+                        data: data,
+                        backgroundColor: COLORS.secondary,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { borderDash: [4, 4] } }
+                    }
+                }
+            });
+        }
+
+        function renderSeasonalityChart(data) {
+            const ctx = document.getElementById('seasonalityChart').getContext('2d');
+            if (charts.seasonality) charts.seasonality.destroy();
+            charts.seasonality = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: MONTH_NAMES,
+                    datasets: [{
+                        label: 'Avg Daily Precip (mm)',
+                        data: data,
+                        backgroundColor: COLORS.primaryLight,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { borderDash: [4, 4] } }
+                    }
+                }
+            });
+        }
+
+        function renderIntensityChart(data) {
+            const ctx = document.getElementById('intensityChart').getContext('2d');
+            if (charts.intensity) charts.intensity.destroy();
+            charts.intensity = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['No Rain (<0.1mm)', 'Light (0.1-5mm)', 'Moderate (5-20mm)', 'Heavy (>20mm)'],
+                    datasets: [{
+                        data: data,
+                        backgroundColor: COLORS.categories,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12 } }
+                    }
+                }
+            });
+        }
+
+        function renderTopDaysChart(topData) {
+            const ctx = document.getElementById('topDaysChart').getContext('2d');
+            if (charts.topDays) charts.topDays.destroy();
+            
+            const labels = topData.map(d => d.dateStr);
+            const data = topData.map(d => d.precip);
+
+            charts.topDays = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Precipitation (mm)',
+                        data: data,
+                        backgroundColor: COLORS.secondaryLight,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, grid: { borderDash: [4, 4] } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // 6. Actionable Insights Generation
+        function generateInsights(yearlyMap, totalPrecip, rainyPct, intensityCounts, totalDays, top5) {
+            const container = document.getElementById('insights-container');
+            container.innerHTML = ''; // Clear previous
+
+            // Insight 1: Wettest Year
+            let wettestYear = "-";
+            let maxYearPrecip = 0;
+            for (const [year, precip] of Object.entries(yearlyMap)) {
+                if (precip > maxYearPrecip) {
+                    maxYearPrecip = precip;
+                    wettestYear = year;
+                }
+            }
+            
+            let html = '';
+            
+            if (Object.keys(yearlyMap).length > 1) {
+                html += `
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-teal-100">
+                    <strong class="text-navy-900 block mb-1">Peak Annual Volume</strong>
+                    The wettest year in the selected range was <strong>${wettestYear}</strong> with <strong>${maxYearPrecip.toFixed(1)}mm</strong>. Consider reviewing drainage infrastructure capacity modeled against this peak.
+                </div>`;
+            } else if (Object.keys(yearlyMap).length === 1) {
+                html += `
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-teal-100">
+                    <strong class="text-navy-900 block mb-1">Annual Volume</strong>
+                    The total recorded precipitation for <strong>${wettestYear}</strong> is <strong>${maxYearPrecip.toFixed(1)}mm</strong>.
+                </div>`;
+            }
+
+            // Insight 2: Rainy Frequency
+            const dryPct = 100 - rainyPct;
+            html += `
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-teal-100">
+                <strong class="text-navy-900 block mb-1">Operational Downtime Risk</strong>
+                <strong>${rainyPct.toFixed(1)}%</strong> of days experience measurable precipitation. Projects requiring dry conditions have a historical <strong>${dryPct.toFixed(1)}%</strong> viable window in this selection.
+            </div>`;
+
+            // Insight 3: Heavy Rain Alert
+            const heavyPct = (intensityCounts.heavy / totalDays) * 100;
+            const insightColor = heavyPct > 5 ? 'text-rose-600' : 'text-teal-700';
+            html += `
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-teal-100">
+                <strong class="text-navy-900 block mb-1">Extreme Weather Frequency</strong>
+                Days with heavy rain (>20mm) account for <strong class="${insightColor}">${heavyPct.toFixed(1)}%</strong> of the timeline (${intensityCounts.heavy} days). Ensure flood mitigation protocols align with this frequency.
+            </div>`;
+
+            // Insight 4: Peak Single Event
+            if (top5.length > 0) {
+                html += `
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-teal-100">
+                    <strong class="text-navy-900 block mb-1">Maximum Load Event</strong>
+                    The highest single-day rainfall was <strong>${top5[0].precip.toFixed(1)}mm</strong> on <strong>${top5[0].dateStr}</strong>. This serves as the benchmark stress-test for local catchment systems.
+                </div>`;
+            }
+
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
